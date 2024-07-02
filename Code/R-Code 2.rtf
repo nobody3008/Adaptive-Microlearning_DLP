@@ -1,0 +1,97 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh12960\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 # Install necessary packages if not already installed\
+if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl", dependencies = TRUE)\
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr", dependencies = TRUE)\
+if (!requireNamespace("tidyr", quietly = TRUE)) install.packages("tidyr", dependencies = TRUE)\
+if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2", dependencies = TRUE)\
+if (!requireNamespace("cluster", quietly = TRUE)) install.packages("cluster", dependencies = TRUE)\
+if (!requireNamespace("TraMineR", quietly = TRUE)) install.packages("TraMineR", dependencies = TRUE)\
+\
+# Load necessary libraries\
+library(readxl)\
+library(dplyr)\
+library(tidyr)\
+library(ggplot2)\
+library(cluster)\
+library(TraMineR)\
+\
+# Load the dataset\
+data <- read_excel("/Users/keke0709/Downloads/\uc0\u21516 \u27493 \u31354 \u38388 /ECNU/Publish Paper/EDDSCI Paper/Data/Total Data_145counts.xlsx")\
+# Create a sequence column representing the path through steps\
+data <- data %>%\
+  dplyr::mutate(Sequence = paste0(\
+    ifelse(Video1 == 1, "V", ""),\
+    ifelse(Ppt1 == 1, "P", ""),\
+    ifelse(Audio1 == 1, "A", ""),\
+    ifelse(JeopSelect1 == 1, "J", ""),\
+    ifelse(LinkSelect1 == 1, "L", ""),\
+    ifelse(FlashSelect1 == 1, "F", ""),\
+    ifelse(DiscSelect1 == 1, "D", "")\
+  ))\
+\
+# Print first few rows to verify\
+head(data$Sequence)\
+\
+# Sequence Analysis\
+sequences <- seqdef(as.character(data$Sequence))\
+\
+# Plot sequence index plot\
+seqIplot(sequences, with.legend = TRUE, main = "Sequence Index Plot")\
+\
+# Clustering sequences\
+seqdist_matrix <- seqdist(sequences, method = "OM") # Optimal Matching\
+cluster_result <- agnes(seqdist_matrix, diss = TRUE, method = "ward")\
+data <- data %>%\
+  dplyr::mutate(Cluster = cutree(cluster_result, k = 3))\
+\
+# Visualize clusters\
+ggplot(data, aes(x = as.factor(Cluster))) +\
+  geom_bar() +\
+  ggtitle("Distribution of Students Across Clusters") +\
+  xlab("Cluster") +\
+  ylab("Count")\
+\
+# Calculate frequency of revisits\
+revisit_counts <- data %>%\
+  dplyr::summarise(across(c(Video1, Ppt1, Audio1, JeopSelect1, LinkSelect1, FlashSelect1, DiscSelect1), sum))\
+\
+# Convert to long format for ggplot2\
+revisit_counts_long <- revisit_counts %>%\
+  tidyr::pivot_longer(cols = everything(), names_to = "Section", values_to = "Count")\
+\
+# Visualize revisit frequencies\
+ggplot(revisit_counts_long, aes(x = Section, y = Count)) +\
+  geom_bar(stat = "identity") +\
+  ggtitle("Frequency of Revisiting Sections") +\
+  xlab("Sections") +\
+  ylab("Count")\
+\
+# Define high-performing and low-performing students\
+data <- data %>%\
+  dplyr::mutate(Performance = ifelse(PostTest >= median(PostTest, na.rm = TRUE), "High", "Low"))\
+\
+# Compare usage metrics\
+usage_metrics <- c("Duration", "Video1", "Ppt1", "Audio1", "JeopSelect1", "LinkSelect1", "FlashSelect1", "DiscSelect1")\
+\
+# Visualize comparisons using boxplots\
+for (metric in usage_metrics) \{\
+  ggplot(data, aes(x = Performance, y = .data[[metric]])) +\
+    geom_boxplot() +\
+    ggtitle(paste("Comparison of", metric, "Between High and Low Performers")) +\
+    xlab("Performance") +\
+    ylab(metric) +\
+    theme_minimal()\
+\}\
+\
+# Statistical tests\
+for (metric in usage_metrics) \{\
+  t_test_result <- t.test(data[[metric]] ~ data$Performance)\
+  print(paste(metric, ": t-statistic =", t_test_result$statistic, ", p-value =", t_test_result$p.value))\
+\}\
+}
